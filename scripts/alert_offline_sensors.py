@@ -64,7 +64,7 @@ def build_message_lines(offline: List[Dict]) -> List[str]:
     for entry in sorted(offline, key=lambda e: (e["icao"], e["serial"])):
         lines.append(
             f"{entry['serial']} | {entry['icao']} {entry['airport']} ({entry['country']}) "
-            f"| last offline status: {entry['ts'].strftime('%Y-%m-%d %H:%M:%S %Z')}"
+            f"| Last seen offline: {entry['ts'].strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
     return lines
 
