@@ -5,68 +5,12 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
+from sensors_data import SENSOR_SITES
+
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 BASE_API_URL = "https://opensky-network.org/api"
 POCKETHOST_BASE = "https://opdi.pockethost.io"
 POCKETHOST_COLLECTION = "opensky_sensor_status"
-
-# Keep in sync with app presets
-MONITOR_SITES: Dict[str, Dict] = {
-    "ESSA (Stockholm Arlanda, Sweden)": {
-        "icao": "ESSA",
-        "airport": "Stockholm Arlanda",
-        "country_name": "Sweden",
-        "country_iso3": "SWE",
-        "lat": 59.6519,
-        "lon": 17.9186,
-        "sensors": [-1408232560, -1408232534, -1408232487, -1408231910],
-    },
-    "EYVI (Vilnius International, Lithuania)": {
-        "icao": "EYVI",
-        "airport": "Vilnius International",
-        "country_name": "Lithuania",
-        "country_iso3": "LTU",
-        "lat": 54.6341,
-        "lon": 25.2858,
-        "sensors": [2137168417, 1497670044],
-    },
-    "EYPA (Palanga International, Lithuania)": {
-        "icao": "EYPA",
-        "airport": "Palanga International",
-        "country_name": "Lithuania",
-        "country_iso3": "LTU",
-        "lat": 55.9737,
-        "lon": 21.0939,
-        "sensors": [2137191229],
-    },
-    "UGTB (Tbilisi International, Georgia)": {
-        "icao": "UGTB",
-        "airport": "Tbilisi International",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 41.6692,
-        "lon": 44.9547,
-        "sensors": [1996020079, 1995940501],
-    },
-    "UGSB (Batumi International, Georgia)": {
-        "icao": "UGSB",
-        "airport": "Batumi International",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 41.6103,
-        "lon": 41.5997,
-        "sensors": [1995940504],
-    },
-    "UGKO (Kutaisi International, Georgia)": {
-        "icao": "UGKO",
-        "airport": "Kutaisi International",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 42.1770,
-        "lon": 42.4826,
-        "sensors": [1995940582],
-    },
-}
 
 
 def normalize_serial(value: object) -> Optional[int]:
@@ -79,14 +23,14 @@ def normalize_serial(value: object) -> Optional[int]:
 def build_serial_maps() -> Tuple[List[int], Dict[int, Dict[str, str]]]:
     serials: List[int] = []
     serial_to_site: Dict[int, Dict[str, str]] = {}
-    for name, site in MONITOR_SITES.items():
+    for icao, site in SENSOR_SITES.items():
         for raw_serial in site["sensors"]:
             serial = normalize_serial(raw_serial)
             if serial is None:
                 continue
             serials.append(serial)
             serial_to_site[serial] = {
-                "label": name,
+                "label": f"{icao} ({site['airport']})",
                 "icao": site["icao"],
                 "airport": site["airport"],
                 "country_name": site["country_name"],

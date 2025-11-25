@@ -28,4 +28,4 @@ A Streamlit remake of Xavier’s Olive Observable dashboard, focused on the pred
    streamlit run app.py
    ```
 
-Use the sidebar to pick a site, sensor for coverage, coverage date (defaults to yesterday), and the message-rate lookback window. Click “Refresh now” to force a fresh fetch.#
+Use the sidebar to pick a site, sensor for coverage, coverage date (defaults to yesterday), and the message-rate lookback window. Click “Refresh now” to force a fresh fetch.

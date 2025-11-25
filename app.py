@@ -9,41 +9,15 @@ import pydeck as pdk
 import requests
 import streamlit as st
 
+from sensors_data import SENSOR_SITES
+
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 BASE_API_URL = "https://opensky-network.org/api"
+POCKETHOST_BASE = "https://opdi.pockethost.io"
+POCKETHOST_COLLECTION = "opensky_sensor_status"
 
-# Sensor presets provided earlier
 MONITOR_SITES: Dict[str, Dict] = {
-    "ESSA (Stockholm Arlanda, Sweden)": {
-        "lat": 59.6519,
-        "lon": 17.9186,
-        "sensors": [-1408232560, -1408232534, -1408232487, -1408231910],
-    },
-    "EYVI (Vilnius International, Lithuania)": {
-        "lat": 54.6341,
-        "lon": 25.2858,
-        "sensors": [2137168417, 1497670044],
-    },
-    "EYPA (Palanga International, Lithuania)": {
-        "lat": 55.9737,
-        "lon": 21.0939,
-        "sensors": [2137191229],
-    },
-    "UGTB (Tbilisi International, Georgia)": {
-        "lat": 41.6692,
-        "lon": 44.9547,
-        "sensors": [1996020079, 1995940501],
-    },
-    "UGSB (Batumi International, Georgia)": {
-        "lat": 41.6103,
-        "lon": 41.5997,
-        "sensors": [1995940504],
-    },
-    "UGKO (Kutaisi International, Georgia)": {
-        "lat": 42.1770,
-        "lon": 42.4826,
-        "sensors": [1995940582],
-    },
+    f"{icao} ({meta['airport']})": meta for icao, meta in SENSOR_SITES.items()
 }
 
 COLOR_PALETTE = [
@@ -69,13 +43,22 @@ def normalize_serial(value: object) -> Optional[int]:
 def _build_serial_maps() -> Tuple[List[int], Dict[int, Dict[str, float]]]:
     serials = []
     mapping: Dict[int, Dict[str, float]] = {}
-    for name, site in MONITOR_SITES.items():
-        for raw_serial in site["sensors"]:
+    for icao, base in SENSOR_SITES.items():
+        display_name = f"{icao} ({base['airport']})"
+        for raw_serial in base["sensors"]:
             serial = normalize_serial(raw_serial)
             if serial is None:
                 continue
             serials.append(serial)
-            mapping[serial] = {"name": name, "lat": site["lat"], "lon": site["lon"]}
+            mapping[serial] = {
+                "name": display_name,
+                "lat": base["lat"],
+                "lon": base["lon"],
+                "icao": icao,
+                "airport": base.get("airport", ""),
+                "country": base.get("country", ""),
+                "country_iso3": base.get("country_iso3", ""),
+            }
     return sorted(set(serials)), mapping
 
 
@@ -105,6 +88,10 @@ def _get_credentials() -> Tuple[str, str]:
     client_id = os.getenv("OPENSKY_CLIENT_ID") or _load_secrets("opensky_client_id", "")
     client_secret = os.getenv("OPENSKY_CLIENT_SECRET") or _load_secrets("opensky_client_secret", "")
     return client_id, client_secret
+
+
+def _get_pockethost_token() -> str:
+    return os.getenv("POCKETHOST_ADMIN_TOKEN") or _load_secrets("pockethost_admin_token", "")
 
 
 @st.cache_data(ttl=1500, show_spinner=False)
@@ -234,7 +221,43 @@ def render_msg_chart(msg_df: pd.DataFrame, serial_order: List[int], label_lookup
         )
         .properties(height=320)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
+
+
+@st.cache_data(show_spinner=False, ttl=300)
+def fetch_status_history(ph_token: str, months: int) -> pd.DataFrame:
+    """Fetch online/offline history from PocketHost for the given lookback window."""
+    if not ph_token:
+        return pd.DataFrame()
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=months * 30)
+    params = {
+        "perPage": 500,
+        "sort": "-polling_time",
+        "filter": f'polling_time > "{start.isoformat(timespec="seconds").replace("+00:00", "Z")}"',
+    }
+    url = f"{POCKETHOST_BASE}/api/collections/{POCKETHOST_COLLECTION}/records"
+    headers = {"Authorization": ph_token, "User-Agent": "opensky-sensor-dashboard"}
+    resp = requests.get(url, headers=headers, params=params, timeout=30)
+    resp.raise_for_status()
+    items = resp.json().get("items", [])
+    rows = []
+    for item in items:
+        rows.append(
+            {
+                "serial": normalize_serial(item.get("sensor_serial")),
+                "icao": item.get("sensor_site_airport_icao", ""),
+                "airport": item.get("sensor_site_airport_name", ""),
+                "country": item.get("sensor_site_country_name", ""),
+                "ts": pd.to_datetime(item.get("polling_time"), utc=True, errors="coerce"),
+                "online": bool(item.get("sensor_online", False)),
+            }
+        )
+    df = pd.DataFrame(rows)
+    df = df[df["serial"].notna()].copy()
+    df["serial"] = df["serial"].astype(int)
+    df = df[df["ts"].notna()]
+    return df
 
 
 def render_map(sensor_df: pd.DataFrame, coverage_coords: List[List[float]], coverage_serial: Optional[int]) -> None:
@@ -291,7 +314,7 @@ def render_map(sensor_df: pd.DataFrame, coverage_coords: List[List[float]], cove
         layers=layers,
         tooltip={"text": "Serial: {serial}\nSite: {site}\nOnline: {online}\nLast seen: {last_seen_dt}"},
     )
-    st.pydeck_chart(deck, use_container_width=True)
+    st.pydeck_chart(deck, width="stretch")
 
 
 def render_map_with_polygons(sensor_df: pd.DataFrame, coverage_polygons: List[Dict[str, object]]) -> None:
@@ -358,7 +381,7 @@ def render_map_with_polygons(sensor_df: pd.DataFrame, coverage_polygons: List[Di
         layers=layers,
         tooltip={"text": "Serial: {serial}\nSite: {site}\nOnline: {online}\nLast seen: {last_seen_dt}"},
     )
-    st.pydeck_chart(deck, use_container_width=True)
+    st.pydeck_chart(deck, width="stretch")
 
 
 def main() -> None:
@@ -380,7 +403,7 @@ def main() -> None:
         )
         logo_path = os.path.join("assets", "PRC logo.png")
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, use_container_width=True)
+            st.sidebar.image(logo_path, width="stretch")
         st.title("OpenSky Sensor Dashboard")
 
         st.subheader("Site settings")
@@ -391,7 +414,7 @@ def main() -> None:
         coverage_serial = st.selectbox("Sensor serial", selected_serials, key="site_coverage_serial")
         coverage_day = st.date_input(
             "Coverage day",
-            value=datetime.utcnow().date() - timedelta(days=1),
+            value=datetime.now(timezone.utc).date() - timedelta(days=1),
             key="site_coverage_day",
             help="Uses /range/days endpoint for the chosen sensor.",
         )
@@ -400,16 +423,20 @@ def main() -> None:
         st.subheader("All sensors settings")
         all_coverage_day = st.date_input(
             "Coverage day (all)",
-            value=datetime.utcnow().date() - timedelta(days=1),
+            value=datetime.now(timezone.utc).date() - timedelta(days=1),
             key="all_coverage_day",
             help="Fetches /range/days for each configured sensor.",
         )
         all_rate_hours = st.slider("Msg rate window (hours, all)", 1, 72, 24, 1, key="all_rate_hours")
+        st.subheader("Status history")
+        history_months = st.slider("History window (months)", 1, 12, 3, 1, key="history_months")
+    
         force_refresh = st.button("Refresh now", type="primary")
         if force_refresh:
             st.session_state["api_logs"] = []
 
     client_id, client_secret = _get_credentials()
+    ph_token = _get_pockethost_token()
 
     if not client_id or not client_secret:
         st.warning("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET as environment variables to continue.")
@@ -428,7 +455,7 @@ def main() -> None:
         st.warning("No sensor metadata returned for the configured serials.")
         return
 
-    tab_site, tab_all = st.tabs(["Site view", "All sensors"])
+    tab_site, tab_all, tab_history = st.tabs(["Site view", "All sensors", "Status history"])
 
     with tab_site:
         st.subheader("Single site view")
@@ -480,10 +507,10 @@ def main() -> None:
                 {s: f"{s} ({SERIAL_TO_SITE.get(s, {}).get('name', site_choice)})" for s in selected_serials},
             )
 
-            st.subheader("Sensor details")
-            display_cols = ["serial", "site", "type", "online", "latitude", "longitude", "added_dt", "last_seen_dt"]
-            with st.spinner("Loading sensor details..."):
-                st.dataframe(site_df[display_cols], hide_index=True, use_container_width=True)
+        st.subheader("Sensor details")
+        display_cols = ["serial", "site", "type", "online", "latitude", "longitude", "added_dt", "last_seen_dt"]
+        with st.spinner("Loading sensor details..."):
+            st.dataframe(site_df[display_cols], hide_index=True, width="stretch")
 
         with st.expander("API requests (details)", expanded=False):
             logs = st.session_state.get("api_logs", [])
@@ -546,6 +573,72 @@ def main() -> None:
                 hide_index=True,
                 use_container_width=True,
             )
+
+    with tab_history:
+        st.subheader("Sensor status history")
+        if not ph_token:
+            st.warning("Set POCKETHOST_ADMIN_TOKEN (or pockethost_admin_token in secrets) to view history.")
+        else:
+            with st.spinner("Fetching status history..."):
+                history_df = fetch_status_history(ph_token, history_months)
+            if history_df.empty:
+                st.warning("No status history found for the selected window.")
+            else:
+                history_df["label"] = history_df.apply(
+                    lambda row: f"{row['serial']} ({row['icao']}) - {row['airport']}", axis=1
+                )
+                history_df["site_group"] = history_df.apply(
+                    lambda row: f"{row['icao']} - {row['airport']}", axis=1
+                )
+                history_df["online_val"] = history_df["online"].astype(int)
+                history_df["status_txt"] = history_df["online"].apply(lambda v: "Online" if v else "Offline")
+                history_df = history_df.sort_values(["country", "site_group", "serial", "ts"])
+                for country, country_df in history_df.groupby("country"):
+                    st.markdown(f"## {country}")
+                    site_groups = list(country_df["site_group"].unique())
+                    for idx in range(0, len(site_groups), 2):
+                        cols = st.columns(2)
+                        for offset in range(2):
+                            if idx + offset >= len(site_groups):
+                                continue
+                            site_name = site_groups[idx + offset]
+                            site_df = country_df[country_df["site_group"] == site_name]
+                            with cols[offset]:
+                                st.markdown(f"### {site_name}")
+                                line = (
+                                    alt.Chart(site_df)
+                                    .mark_line(interpolate="step-after", strokeWidth=2)
+                                    .encode(
+                                        x=alt.X("ts:T", title="Timestamp (UTC)"),
+                                        y=alt.Y(
+                                            "online_val:Q",
+                                            title="",
+                                            scale=alt.Scale(domain=[0, 1]),
+                                            axis=alt.Axis(values=[0, 1], labels=False, ticks=False),
+                                        ),
+                                        color=alt.Color(
+                                            "status_txt:N",
+                                            legend=alt.Legend(title="Status"),
+                                            scale=alt.Scale(domain=["Online", "Offline"], range=["#2a9d8f", "#e76f51"]),
+                                        ),
+                                        tooltip=[
+                                            alt.Tooltip("label:N", title="Sensor"),
+                                            alt.Tooltip("ts:T", title="Timestamp (UTC)"),
+                                            alt.Tooltip("status_txt:N", title="Status"),
+                                        ],
+                                    )
+                                    .properties(height=80)
+                                )
+                                points = line.mark_circle(size=35, strokeWidth=0)
+                                layered = alt.layer(line, points)
+                                faceted = layered.facet(
+                                    row=alt.Row(
+                                        "label:N",
+                                        title=None,
+                                        header=alt.Header(labelAngle=0, labelAlign="left"),
+                                    )
+                                )
+                                st.altair_chart(faceted.resolve_scale(y="independent"), width="stretch")
 
 
 if __name__ == "__main__":
