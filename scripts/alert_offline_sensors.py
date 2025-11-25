@@ -33,10 +33,9 @@ def fetch_latest_status(token: str) -> Dict[int, Dict]:
 
 
 def collect_offline(latest: Dict[int, Dict], now: datetime) -> List[Dict]:
-    """Return sensors whose latest status is offline between 24h and 48h ago."""
+    """Return sensors whose latest status is offline within the last 24h."""
     offline: List[Dict] = []
     threshold_24 = now - timedelta(hours=24)
-    threshold_48 = now - timedelta(hours=48)
     for serial, item in latest.items():
         online = bool(item.get("sensor_online", False))
         ts_raw = item.get("polling_time")
@@ -45,10 +44,9 @@ def collect_offline(latest: Dict[int, Dict], now: datetime) -> List[Dict]:
         ts = iso_to_dt(ts_raw)
         if online:
             continue
-        if threshold_48 >= ts:
-            # older than 48h, skip to avoid repeated alerts
+        if ts < threshold_24 or ts > now:
             continue
-        if ts <= threshold_24:
+        if ts <= now:
             offline.append(
                 {
                     "serial": serial,
@@ -61,20 +59,49 @@ def collect_offline(latest: Dict[int, Dict], now: datetime) -> List[Dict]:
     return offline
 
 
-def build_message(offline: List[Dict]) -> str:
-    if not offline:
-        return ""
-    lines = ["OpenSky sensors offline between 24–48h:"]
+def build_message_lines(offline: List[Dict]) -> List[str]:
+    lines = []
     for entry in sorted(offline, key=lambda e: (e["icao"], e["serial"])):
         lines.append(
-            f"- {entry['serial']} | {entry['icao']} {entry['airport']} ({entry['country']}) "
+            f"{entry['serial']} | {entry['icao']} {entry['airport']} ({entry['country']}) "
             f"| last offline status: {entry['ts'].strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
-    return "\n".join(lines)
+    return lines
 
 
-def send_teams(webhook_url: str, body: str) -> None:
-    payload = {"text": body}
+def send_teams(webhook_url: str, title: str, lines: List[str]) -> None:
+    facts = []
+    for line in lines:
+        parts = line.split("|", maxsplit=2)
+        name = parts[0].strip()
+        value = " | ".join(p.strip() for p in parts[1:]) if len(parts) > 1 else ""
+        facts.append({"title": name, "value": value})
+
+    payload = {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                        {"type": "TextBlock", "size": "Medium", "weight": "Bolder", "text": title},
+                        {"type": "TextBlock", "text": "Offline in the last 24h", "isSubtle": True, "spacing": "None"},
+                        {"type": "FactSet", "facts": facts},
+                    ],
+                    "actions": [
+                        {
+                            "type": "Action.OpenUrl",
+                            "title": "Open monitoring dashboard",
+                            "url": "https://opensky-sensor-dashboard.streamlit.app/",
+                        }
+                    ],
+                },
+            }
+        ],
+    }
     resp = requests.post(webhook_url, json=payload, timeout=15)
     if not resp.ok:
         raise RuntimeError(f"Teams webhook failed ({resp.status_code}): {resp.text}")
@@ -91,11 +118,11 @@ def main() -> None:
     now = datetime.now(timezone.utc)
     latest = fetch_latest_status(token)
     offline = collect_offline(latest, now)
-    message = build_message(offline)
-    if not message:
-        print("No sensors offline between 24–48h; no alert sent.")
+    lines = build_message_lines(offline)
+    if not lines:
+        print("No sensors offline in last 24h; no alert sent.")
         return
-    send_teams(teams_webhook, message)
+    send_teams(teams_webhook, "OpenSky sensors offline", lines)
     print("Teams alert sent.")
 
 
