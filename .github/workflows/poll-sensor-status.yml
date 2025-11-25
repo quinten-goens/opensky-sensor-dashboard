@@ -15,6 +15,7 @@ jobs:
       OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
       OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
       POCKETHOST_ADMIN_TOKEN: ${{ secrets.POCKETHOST_ADMIN_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
