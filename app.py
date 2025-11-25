@@ -17,7 +17,7 @@ MONITOR_SITES: Dict[str, Dict] = {
     "ESSA (Stockholm Arlanda, Sweden)": {
         "lat": 59.6519,
         "lon": 17.9186,
-        "sensors": [-1408232560, -1408232534, -1408232487],
+        "sensors": [-1408232560, -1408232534, -1408232487, -1408231910],
     },
     "EYVI (Vilnius International, Lithuania)": {
         "lat": 54.6341,
