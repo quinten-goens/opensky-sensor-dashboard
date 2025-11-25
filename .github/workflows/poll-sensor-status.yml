@@ -29,5 +29,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: Validate required secrets
+        run: |
+          missing=0
+          for var in OPENSKY_CLIENT_ID OPENSKY_CLIENT_SECRET POCKETHOST_ADMIN_TOKEN; do
+            if [ -z "${!var}" ]; then
+              echo "::error title=Missing secret::Environment variable $var is not set. Add it to repo secrets."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Poll sensors and push status
         run: python scripts/poll_sensor_status.py
