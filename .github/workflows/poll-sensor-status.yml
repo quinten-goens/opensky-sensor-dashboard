@@ -44,4 +44,4 @@ jobs:
           fi
 
       - name: Poll sensors and push status
-        run: python scripts/poll_sensor_status.py
+        run: python -m scripts.poll_sensor_status
