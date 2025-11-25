@@ -102,10 +102,8 @@ def _load_secrets(key: str, default: str = "") -> str:
 
 def _get_credentials() -> Tuple[str, str]:
     """Retrieve OpenSky API credentials from environment or Streamlit secrets."""
-    manual_id = st.session_state.get("manual_client_id", "")
-    manual_secret = st.session_state.get("manual_client_secret", "")
-    client_id = manual_id or os.getenv("OPENSKY_CLIENT_ID") or _load_secrets("opensky_client_id", "")
-    client_secret = manual_secret or os.getenv("OPENSKY_CLIENT_SECRET") or _load_secrets("opensky_client_secret", "")
+    client_id = os.getenv("OPENSKY_CLIENT_ID") or _load_secrets("opensky_client_id", "")
+    client_secret = os.getenv("OPENSKY_CLIENT_SECRET") or _load_secrets("opensky_client_secret", "")
     return client_id, client_secret
 
 
@@ -365,39 +363,58 @@ def render_map_with_polygons(sensor_df: pd.DataFrame, coverage_polygons: List[Di
 
 def main() -> None:
     st.set_page_config(page_title="OpenSky Sensor Dashboard", layout="wide")
-    st.title("OpenSky Sensor Dashboard")
-    st.caption("Monitoring the configured sensor fleet with coverage, status, and message rates.")
 
-    client_id, client_secret = _get_credentials()
     st.session_state.setdefault("api_logs", [])
     st.session_state.setdefault("log_api", True)
 
     with st.sidebar:
-        st.subheader("Credentials")
-        manual_id = st.text_input(
-            "Client ID",
-            value=st.session_state.get("manual_client_id", ""),
-            placeholder="OPENSKY_CLIENT_ID",
+        st.markdown(
+            """
+            <style>
+                section[data-testid="stSidebar"] .stImage img {
+                    border-radius: 0 !important;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
         )
-        manual_secret = st.text_input(
-            "Client Secret",
-            value=st.session_state.get("manual_client_secret", ""),
-            placeholder="OPENSKY_CLIENT_SECRET",
-            type="password",
+        logo_path = os.path.join("assets", "PRC logo.png")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+        st.title("OpenSky Sensor Dashboard")
+
+        st.subheader("Site settings")
+        site_choice = st.selectbox("Preset site", list(MONITOR_SITES.keys()), key="site_select")
+        selected_serials = [
+            s for s in (normalize_serial(s) for s in MONITOR_SITES[site_choice]["sensors"]) if s is not None
+        ]
+        coverage_serial = st.selectbox("Sensor serial", selected_serials, key="site_coverage_serial")
+        coverage_day = st.date_input(
+            "Coverage day",
+            value=datetime.utcnow().date() - timedelta(days=1),
+            key="site_coverage_day",
+            help="Uses /range/days endpoint for the chosen sensor.",
         )
-        if st.button("Use these credentials"):
-            st.session_state["manual_client_id"] = manual_id.strip()
-            st.session_state["manual_client_secret"] = manual_secret.strip()
-            client_id, client_secret = _get_credentials()
-            st.success("Credentials updated for this session.")
+        rate_hours = st.slider("Msg rate window (hours)", 1, 72, 24, 1, key="site_rate_hours")
+
+        st.subheader("All sensors settings")
+        all_coverage_day = st.date_input(
+            "Coverage day (all)",
+            value=datetime.utcnow().date() - timedelta(days=1),
+            key="all_coverage_day",
+            help="Fetches /range/days for each configured sensor.",
+        )
+        all_rate_hours = st.slider("Msg rate window (hours, all)", 1, 72, 24, 1, key="all_rate_hours")
+        force_refresh = st.button("Refresh now", type="primary")
+        if force_refresh:
+            st.session_state["api_logs"] = []
+
+    client_id, client_secret = _get_credentials()
 
     if not client_id or not client_secret:
         st.warning("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET as environment variables to continue.")
         return
 
-    force_refresh = st.button("Refresh now", type="primary")
-    if force_refresh:
-        st.session_state["api_logs"] = []
     cache_bust = str(time.time()) if force_refresh else "stable"
 
     try:
@@ -415,28 +432,8 @@ def main() -> None:
 
     with tab_site:
         st.subheader("Single site view")
-        col_left, col_right = st.columns([2, 1])
-        with col_left:
-            site_choice = st.selectbox("Preset site", list(MONITOR_SITES.keys()), key="site_select")
-        selected_serials = [
-            s for s in (normalize_serial(s) for s in MONITOR_SITES[site_choice]["sensors"]) if s is not None
-        ]
-        with col_right:
-            st.metric("Serials in site", f"{len(selected_serials)}")
-            st.caption(f"{', '.join(map(str, selected_serials))}")
-
-        col_a, col_b, col_c = st.columns([1, 1, 1])
-        with col_a:
-            coverage_serial = st.selectbox("Coverage focus", selected_serials, key="site_coverage_serial")
-        with col_b:
-            coverage_day = st.date_input(
-                "Coverage day",
-                value=datetime.utcnow().date() - timedelta(days=1),
-                key="site_coverage_day",
-                help="Uses /range/days endpoint for the chosen sensor.",
-            )
-        with col_c:
-            rate_hours = st.slider("Msg rate window (hours)", 1, 72, 24, 1, key="site_rate_hours")
+        st.caption("Monitoring the configured sensor with coverage, status, and message rates.")
+        st.caption(f"Site: {site_choice} | Serials: {', '.join(map(str, selected_serials))}")
 
         site_df = sensors_df[sensors_df["serial"].isin(selected_serials)].copy()
         if site_df.empty:
@@ -462,10 +459,11 @@ def main() -> None:
 
             st.subheader("Message rates")
             msg_df = pd.DataFrame()
-            try:
-                msg_df = fetch_msg_rates(token, selected_serials, rate_hours, cache_bust)
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Message rates unavailable: {exc}")
+            with st.spinner("Loading message rates..."):
+                try:
+                    msg_df = fetch_msg_rates(token, selected_serials, rate_hours, cache_bust)
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Message rates unavailable: {exc}")
 
             if not msg_df.empty:
                 msg_df = msg_df.merge(
@@ -484,7 +482,8 @@ def main() -> None:
 
             st.subheader("Sensor details")
             display_cols = ["serial", "site", "type", "online", "latitude", "longitude", "added_dt", "last_seen_dt"]
-            st.dataframe(site_df[display_cols], hide_index=True, use_container_width=True)
+            with st.spinner("Loading sensor details..."):
+                st.dataframe(site_df[display_cols], hide_index=True, use_container_width=True)
 
         with st.expander("API requests (details)", expanded=False):
             logs = st.session_state.get("api_logs", [])
@@ -498,19 +497,7 @@ def main() -> None:
 
     with tab_all:
         st.subheader("All sensors")
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            all_coverage_day = st.date_input(
-                "Coverage day (all)",
-                value=datetime.utcnow().date() - timedelta(days=1),
-                key="all_coverage_day",
-                help="Fetches /range/days for each configured sensor.",
-            )
-        with col_b:
-            all_rate_hours = st.slider(
-                "Msg rate window (hours, all sensors)", 1, 72, 24, 1, key="all_rate_hours"
-            )
-
+        st.caption("Monitoring the configured sensor fleet with coverage, status, and message rates.")
         st.subheader("Coverage map (all sensors)")
         coverage_polygons: List[Dict[str, object]] = []
         prev_log_flag = st.session_state.get("log_api", True)
@@ -528,10 +515,11 @@ def main() -> None:
 
             st.subheader("Message rates (all sensors)")
             all_msg_df = pd.DataFrame()
-            try:
-                all_msg_df = fetch_msg_rates(token, ALL_SERIALS, all_rate_hours, cache_bust)
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Message rates unavailable: {exc}")
+            with st.spinner("Loading message rates..."):
+                try:
+                    all_msg_df = fetch_msg_rates(token, ALL_SERIALS, all_rate_hours, cache_bust)
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Message rates unavailable: {exc}")
 
             if not all_msg_df.empty:
                 all_msg_df = all_msg_df.merge(
@@ -552,7 +540,12 @@ def main() -> None:
 
         st.subheader("All sensor details")
         display_cols = ["serial", "site", "type", "online", "latitude", "longitude", "added_dt", "last_seen_dt"]
-        st.dataframe(sensors_df[display_cols].sort_values(["site", "serial"]), hide_index=True, use_container_width=True)
+        with st.spinner("Loading sensor details..."):
+            st.dataframe(
+                sensors_df[display_cols].sort_values(["site", "serial"]),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 if __name__ == "__main__":
