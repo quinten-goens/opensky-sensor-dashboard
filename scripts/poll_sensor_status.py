@@ -1,9 +1,15 @@
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import requests
+
+# Ensure project root is on the import path when executed from scripts/
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from sensors_data import SENSOR_SITES
 
