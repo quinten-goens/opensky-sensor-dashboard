@@ -102,8 +102,10 @@ def _load_secrets(key: str, default: str = "") -> str:
 
 def _get_credentials() -> Tuple[str, str]:
     """Retrieve OpenSky API credentials from environment or Streamlit secrets."""
-    client_id = os.getenv("OPENSKY_CLIENT_ID") or _load_secrets("opensky_client_id", "")
-    client_secret = os.getenv("OPENSKY_CLIENT_SECRET") or _load_secrets("opensky_client_secret", "")
+    manual_id = st.session_state.get("manual_client_id", "")
+    manual_secret = st.session_state.get("manual_client_secret", "")
+    client_id = manual_id or os.getenv("OPENSKY_CLIENT_ID") or _load_secrets("opensky_client_id", "")
+    client_secret = manual_secret or os.getenv("OPENSKY_CLIENT_SECRET") or _load_secrets("opensky_client_secret", "")
     return client_id, client_secret
 
 
@@ -369,6 +371,25 @@ def main() -> None:
     client_id, client_secret = _get_credentials()
     st.session_state.setdefault("api_logs", [])
     st.session_state.setdefault("log_api", True)
+
+    with st.sidebar:
+        st.subheader("Credentials")
+        manual_id = st.text_input(
+            "Client ID",
+            value=st.session_state.get("manual_client_id", ""),
+            placeholder="OPENSKY_CLIENT_ID",
+        )
+        manual_secret = st.text_input(
+            "Client Secret",
+            value=st.session_state.get("manual_client_secret", ""),
+            placeholder="OPENSKY_CLIENT_SECRET",
+            type="password",
+        )
+        if st.button("Use these credentials"):
+            st.session_state["manual_client_id"] = manual_id.strip()
+            st.session_state["manual_client_secret"] = manual_secret.strip()
+            client_id, client_secret = _get_credentials()
+            st.success("Credentials updated for this session.")
 
     if not client_id or not client_secret:
         st.warning("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET as environment variables to continue.")
