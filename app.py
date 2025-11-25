@@ -95,7 +95,7 @@ def serial_hex(serial: int) -> str:
 
 def _load_secrets(key: str, default: str = "") -> str:
     try:
-        return st.secrets.get(key, default)
+        return st.secrets[key]
     except Exception:
         return default
 
