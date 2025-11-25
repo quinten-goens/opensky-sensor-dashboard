@@ -7,7 +7,7 @@ import requests
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 SENSOR_URL = "https://opensky-network.org/api/sensor/list"
 
-GEORGIA_SERIALS = {1996020079, 1995940501, 1995940504, 1995940582}
+GEORGIA_SERIALS = {1408232560, 1408232534, 1408232487, 1996020079, 1995940501, 1995940504, 1995940582}
 
 
 def get_token(client_id: str, client_secret: str) -> str:
@@ -49,6 +49,7 @@ def main():
         sys.exit(f"Failed to fetch sensor list: {exc}")
 
     found = False
+    print(sensors)
     for sensor in sensors:
         serial = sensor.get("serial")
         if serial not in GEORGIA_SERIALS:
