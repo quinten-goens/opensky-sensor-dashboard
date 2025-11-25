@@ -11,7 +11,19 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sensors_data import SENSOR_SITES
+try:
+    from sensors_data import SENSOR_SITES
+except ImportError:
+    import importlib.util
+
+    sensors_path = ROOT / "sensors_data.py"
+    spec = importlib.util.spec_from_file_location("sensors_data", sensors_path)
+    if spec and spec.loader:
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        SENSOR_SITES = module.SENSOR_SITES
+    else:
+        raise
 
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 BASE_API_URL = "https://opensky-network.org/api"
