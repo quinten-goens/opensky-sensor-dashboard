@@ -68,7 +68,7 @@ def _get_pockethost_token() -> str:
 
 @st.cache_data(show_spinner=False, ttl=600)
 def load_sensor_metadata(
-    ph_token: str,
+    ph_token: str, cache_bust: str
 ) -> Tuple[pd.DataFrame, List[int], Dict[int, Dict[str, object]], Dict[str, Dict[str, object]]]:
     """Load sensor/site metadata from PocketBase."""
     if not ph_token:
@@ -86,7 +86,7 @@ def load_sensor_metadata(
 
 
 @st.cache_data(ttl=1500, show_spinner=False)
-def fetch_token(client_id: str, client_secret: str) -> str:
+def fetch_token(client_id: str, client_secret: str, cache_bust: str) -> str:
     data = {
         "grant_type": "client_credentials",
         "client_id": client_id,
@@ -399,12 +399,14 @@ def main() -> None:
 
     st.session_state.setdefault("api_logs", [])
     st.session_state.setdefault("log_api", True)
+    force_refresh_flag = st.session_state.pop("force_refresh", False)
 
     client_id, client_secret = _get_credentials()
     ph_token = _get_pockethost_token()
+    cache_bust = str(time.time()) if force_refresh_flag else "stable"
 
     try:
-        _metadata_df, all_serials, serial_to_site, monitor_sites = load_sensor_metadata(ph_token)
+        _metadata_df, all_serials, serial_to_site, monitor_sites = load_sensor_metadata(ph_token, cache_bust)
     except Exception as exc:  # noqa: BLE001
         st.error(str(exc))
         return
@@ -419,10 +421,17 @@ def main() -> None:
     MONITOR_SITES = monitor_sites
     set_serial_colors(ALL_SERIALS)
 
+    if force_refresh_flag:
+        st.session_state["api_logs"] = []
+
     with st.sidebar:
         st.markdown(
             """
             <style>
+                section[data-testid="stSidebar"] {
+                    width: 23vw !important;
+                    min-width: 300px;
+                }
                 section[data-testid="stSidebar"] .stImage img {
                     border-radius: 0 !important;
                 }
@@ -440,10 +449,11 @@ def main() -> None:
         selected_serials = [
             s for s in (normalize_serial(s) for s in MONITOR_SITES[site_choice]["sensors"]) if s is not None
         ]
-        coverage_serial = st.selectbox(
+        col_serial, col_day = st.columns(2)
+        coverage_serial = col_serial.selectbox(
             "Sensor serial", selected_serials if selected_serials else ["No sensors"], key="site_coverage_serial"
         )
-        coverage_day = st.date_input(
+        coverage_day = col_day.date_input(
             "Coverage day",
             value=datetime.now(timezone.utc).date() - timedelta(days=1),
             key="site_coverage_day",
@@ -452,28 +462,34 @@ def main() -> None:
         rate_hours = st.slider("Msg rate window (hours)", 1, 72, 24, 1, key="site_rate_hours")
 
         st.subheader("All sensors settings")
-        all_coverage_day = st.date_input(
+        col_all_day, col_all_rate = st.columns(2)
+        all_coverage_day = col_all_day.date_input(
             "Coverage day (all)",
             value=datetime.now(timezone.utc).date() - timedelta(days=1),
             key="all_coverage_day",
             help="Fetches /range/days for each configured sensor.",
         )
-        all_rate_hours = st.slider("Msg rate window (hours, all)", 1, 72, 24, 1, key="all_rate_hours")
+        all_rate_hours = col_all_rate.slider(
+            "Msg rate window (hours)", 1, 72, 24, 1, key="all_rate_hours"
+        )
+
         st.subheader("Status history")
         history_months = st.slider("History window (months)", 1, 12, 3, 1, key="history_months")
 
-        force_refresh = st.button("Refresh now", type="primary")
-        if force_refresh:
-            st.session_state["api_logs"] = []
+        st.button(
+            "Refresh now",
+            type="primary",
+            use_container_width=True,
+            key="refresh_now",
+            on_click=lambda: st.session_state.update({"force_refresh": True}),
+        )
 
     if not client_id or not client_secret:
         st.warning("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET as environment variables to continue.")
         return
 
-    cache_bust = str(time.time()) if force_refresh else "stable"
-
     try:
-        token = fetch_token(client_id, client_secret)
+        token = fetch_token(client_id, client_secret, cache_bust)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Failed to obtain OAuth token: {exc}")
         return
