@@ -4,10 +4,10 @@ from datetime import datetime, timezone
 
 import requests
 
+from sensor_metadata import fetch_sensor_details, normalize_serial
+
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 SENSOR_URL = "https://opensky-network.org/api/sensor/list"
-
-GEORGIA_SERIALS = {1408232560, 1408232534, 1408232487, 1996020079, 1995940501, 1995940504, 1995940582}
 
 
 def get_token(client_id: str, client_secret: str) -> str:
@@ -36,11 +36,36 @@ def format_ts(ts: int) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z") if ts else "n/a"
 
 
+def fetch_georgia_serials(pb_token: str):
+    details = fetch_sensor_details(pb_token)
+    serials = []
+    for record in details:
+        serial = normalize_serial(record.get("sensor_serial"))
+        if serial is None:
+            continue
+        iso3 = (record.get("country_iso3") or "").upper()
+        country = (record.get("country_name") or "").lower()
+        if iso3 == "GEO" or country == "georgia":
+            serials.append(serial)
+    return sorted(set(serials))
+
+
 def main():
     client_id = os.getenv("OPENSKY_CLIENT_ID")
     client_secret = os.getenv("OPENSKY_CLIENT_SECRET")
+    pb_token = os.getenv("POCKETHOST_ADMIN_TOKEN")
     if not client_id or not client_secret:
         sys.exit("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET environment variables.")
+    if not pb_token:
+        sys.exit("Set POCKETHOST_ADMIN_TOKEN.")
+
+    try:
+        georgia_serials = fetch_georgia_serials(pb_token)
+    except Exception as exc:  # noqa: BLE001
+        sys.exit(f"Failed to load sensor metadata: {exc}")
+
+    if not georgia_serials:
+        sys.exit("No Georgia sensors found in PocketBase metadata.")
 
     try:
         token = get_token(client_id, client_secret)
@@ -49,15 +74,15 @@ def main():
         sys.exit(f"Failed to fetch sensor list: {exc}")
 
     found = False
-    print(sensors)
+    target_serials = set(georgia_serials)
     for sensor in sensors:
         serial = sensor.get("serial")
-        if serial not in GEORGIA_SERIALS:
+        if normalize_serial(serial) not in target_serials:
             continue
         found = True
         name = sensor.get("name", "")
         last_seen = sensor.get("lastConnectionEvent")
-        print(f"Serial: {serial} | Name: {name} | Last seen: {format_ts(last_seen)} (epoch: {last_seen})")
+        print(f"Serial: {sensor} | Name: {name} | Last seen: {format_ts(last_seen)} (epoch: {last_seen})")
 
     if not found:
         print("No Georgia sensors found in response.")

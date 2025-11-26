@@ -9,77 +9,17 @@ import pydeck as pdk
 import requests
 import streamlit as st
 
-SENSOR_SITES = {
-    "ESSA": {
-        "icao": "ESSA",
-        "airport": "Stockholm Arlanda",
-        "country": "Sweden",
-        "country_name": "Sweden",
-        "country_iso3": "SWE",
-        "lat": 59.6519,
-        "lon": 17.9186,
-        "sensors": [-1408232560, -1408232534, -1408232487, -1408231910],
-    },
-    "EYVI": {
-        "icao": "EYVI",
-        "airport": "Vilnius International",
-        "country": "Lithuania",
-        "country_name": "Lithuania",
-        "country_iso3": "LTU",
-        "lat": 54.6341,
-        "lon": 25.2858,
-        "sensors": [2137168417, 1497670044],
-    },
-    "EYPA": {
-        "icao": "EYPA",
-        "airport": "Palanga International",
-        "country": "Lithuania",
-        "country_name": "Lithuania",
-        "country_iso3": "LTU",
-        "lat": 55.9737,
-        "lon": 21.0939,
-        "sensors": [2137191229],
-    },
-    "UGTB": {
-        "icao": "UGTB",
-        "airport": "Tbilisi International",
-        "country": "Georgia",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 41.6692,
-        "lon": 44.9547,
-        "sensors": [1996020079, 1995940501],
-    },
-    "UGSB": {
-        "icao": "UGSB",
-        "airport": "Batumi International",
-        "country": "Georgia",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 41.6103,
-        "lon": 41.5997,
-        "sensors": [1995940504],
-    },
-    "UGKO": {
-        "icao": "UGKO",
-        "airport": "Kutaisi International",
-        "country": "Georgia",
-        "country_name": "Georgia",
-        "country_iso3": "GEO",
-        "lat": 42.1770,
-        "lon": 42.4826,
-        "sensors": [1995940582],
-    },
-}
+from sensor_metadata import build_sensor_mappings, fetch_sensor_details, normalize_serial
 
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 BASE_API_URL = "https://opensky-network.org/api"
 POCKETHOST_BASE = "https://opdi.pockethost.io"
 POCKETHOST_COLLECTION = "opensky_sensor_status"
 
-MONITOR_SITES: Dict[str, Dict] = {
-    f"{icao} ({meta['airport']})": meta for icao, meta in SENSOR_SITES.items()
-}
+ALL_SERIALS: List[int] = []
+SERIAL_TO_SITE: Dict[int, Dict] = {}
+MONITOR_SITES: Dict[str, Dict] = {}
+SERIAL_COLORS: Dict[int, List[int]] = {}
 
 COLOR_PALETTE = [
     [230, 120, 50],
@@ -93,38 +33,9 @@ COLOR_PALETTE = [
 ]
 
 
-def normalize_serial(value: object) -> Optional[int]:
-    """Convert serials to int while keeping sign; return None when invalid."""
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError, AttributeError):
-        return None
-
-
-def _build_serial_maps() -> Tuple[List[int], Dict[int, Dict[str, float]]]:
-    serials = []
-    mapping: Dict[int, Dict[str, float]] = {}
-    for icao, base in SENSOR_SITES.items():
-        display_name = f"{icao} ({base['airport']})"
-        for raw_serial in base["sensors"]:
-            serial = normalize_serial(raw_serial)
-            if serial is None:
-                continue
-            serials.append(serial)
-            mapping[serial] = {
-                "name": display_name,
-                "lat": base["lat"],
-                "lon": base["lon"],
-                "icao": icao,
-                "airport": base.get("airport", ""),
-                "country": base.get("country", ""),
-                "country_iso3": base.get("country_iso3", ""),
-            }
-    return sorted(set(serials)), mapping
-
-
-ALL_SERIALS, SERIAL_TO_SITE = _build_serial_maps()
-SERIAL_COLORS = {serial: COLOR_PALETTE[i % len(COLOR_PALETTE)] for i, serial in enumerate(ALL_SERIALS)}
+def set_serial_colors(serials: List[int]) -> None:
+    global SERIAL_COLORS
+    SERIAL_COLORS = {serial: COLOR_PALETTE[i % len(COLOR_PALETTE)] for i, serial in enumerate(serials)}
 
 
 def serial_color(serial: int, alpha: int = 200) -> List[int]:
@@ -153,6 +64,25 @@ def _get_credentials() -> Tuple[str, str]:
 
 def _get_pockethost_token() -> str:
     return os.getenv("POCKETHOST_ADMIN_TOKEN") or _load_secrets("pockethost_admin_token", "")
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def load_sensor_metadata(
+    ph_token: str,
+) -> Tuple[pd.DataFrame, List[int], Dict[int, Dict[str, object]], Dict[str, Dict[str, object]]]:
+    """Load sensor/site metadata from PocketBase."""
+    if not ph_token:
+        return pd.DataFrame(), [], {}, {}
+    try:
+        details = fetch_sensor_details(ph_token)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to fetch sensor metadata: {exc}") from exc
+    df = pd.DataFrame(details)
+    if df.empty:
+        return df, [], {}, {}
+    all_serials, serial_to_site, monitor_sites = build_sensor_mappings(details)
+    df["site_label"] = df["sensor_serial"].apply(lambda s: serial_to_site.get(s, {}).get("name", ""))
+    return df, all_serials, serial_to_site, monitor_sites
 
 
 @st.cache_data(ttl=1500, show_spinner=False)
@@ -190,18 +120,37 @@ def _api_get(path: str, token: str, params: Optional[Dict] = None) -> Dict:
 
 
 @st.cache_data(show_spinner=False, ttl=300)
-def fetch_sensor_list(token: str, cache_bust: str) -> pd.DataFrame:
+def fetch_sensor_list(
+    token: str, serial_filter: List[int], serial_to_site: Dict[int, Dict[str, object]], cache_bust: str
+) -> pd.DataFrame:
     data = _api_get("/sensor/list", token)
     df = pd.DataFrame(data)
-    if df.empty:
+    if df.empty or not serial_filter:
         return df
     df["serial"] = df["serial"].apply(normalize_serial)
     df = df[df["serial"].notna()].copy()
     df["serial"] = df["serial"].astype(int)
-    df = df[df["serial"].isin(ALL_SERIALS)].copy()
-    df["site"] = df["serial"].apply(lambda s: SERIAL_TO_SITE.get(s, {}).get("name", ""))
-    df["latitude"] = df["position"].apply(lambda p: p.get("latitude") if isinstance(p, dict) else None)
-    df["longitude"] = df["position"].apply(lambda p: p.get("longitude") if isinstance(p, dict) else None)
+    df = df[df["serial"].isin(serial_filter)].copy()
+    df["site"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("name", ""))
+    df["icao"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("icao", ""))
+    df["airport"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("airport", ""))
+    df["country"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("country", ""))
+    df["latitude"] = df.apply(
+        lambda row: row["position"].get("latitude") if isinstance(row.get("position"), dict) else None, axis=1
+    )
+    df["longitude"] = df.apply(
+        lambda row: row["position"].get("longitude") if isinstance(row.get("position"), dict) else None, axis=1
+    )
+    df["latitude"] = df.apply(
+        lambda row: row["latitude"] if pd.notnull(row["latitude"]) else serial_to_site.get(row["serial"], {}).get("lat"),
+        axis=1,
+    )
+    df["longitude"] = df.apply(
+        lambda row: row["longitude"]
+        if pd.notnull(row["longitude"])
+        else serial_to_site.get(row["serial"], {}).get("lon"),
+        axis=1,
+    )
     df["added_dt"] = pd.to_datetime(df["added"], unit="s", utc=True, errors="coerce")
     df["last_seen_dt"] = pd.to_datetime(df["lastConnectionEvent"], unit="s", utc=True, errors="coerce")
     return df
@@ -451,6 +400,25 @@ def main() -> None:
     st.session_state.setdefault("api_logs", [])
     st.session_state.setdefault("log_api", True)
 
+    client_id, client_secret = _get_credentials()
+    ph_token = _get_pockethost_token()
+
+    try:
+        _metadata_df, all_serials, serial_to_site, monitor_sites = load_sensor_metadata(ph_token)
+    except Exception as exc:  # noqa: BLE001
+        st.error(str(exc))
+        return
+
+    if not all_serials:
+        st.warning("No sensor metadata returned. Set POCKETHOST_ADMIN_TOKEN and verify the PocketBase collection.")
+        return
+
+    global ALL_SERIALS, SERIAL_TO_SITE, MONITOR_SITES
+    ALL_SERIALS = all_serials
+    SERIAL_TO_SITE = serial_to_site
+    MONITOR_SITES = monitor_sites
+    set_serial_colors(ALL_SERIALS)
+
     with st.sidebar:
         st.markdown(
             """
@@ -468,11 +436,13 @@ def main() -> None:
         st.title("OpenSky Sensor Dashboard")
 
         st.subheader("Site settings")
-        site_choice = st.selectbox("Preset site", list(MONITOR_SITES.keys()), key="site_select")
+        site_choice = st.selectbox("Preset site", sorted(MONITOR_SITES.keys()), key="site_select")
         selected_serials = [
             s for s in (normalize_serial(s) for s in MONITOR_SITES[site_choice]["sensors"]) if s is not None
         ]
-        coverage_serial = st.selectbox("Sensor serial", selected_serials, key="site_coverage_serial")
+        coverage_serial = st.selectbox(
+            "Sensor serial", selected_serials if selected_serials else ["No sensors"], key="site_coverage_serial"
+        )
         coverage_day = st.date_input(
             "Coverage day",
             value=datetime.now(timezone.utc).date() - timedelta(days=1),
@@ -491,13 +461,10 @@ def main() -> None:
         all_rate_hours = st.slider("Msg rate window (hours, all)", 1, 72, 24, 1, key="all_rate_hours")
         st.subheader("Status history")
         history_months = st.slider("History window (months)", 1, 12, 3, 1, key="history_months")
-    
+
         force_refresh = st.button("Refresh now", type="primary")
         if force_refresh:
             st.session_state["api_logs"] = []
-
-    client_id, client_secret = _get_credentials()
-    ph_token = _get_pockethost_token()
 
     if not client_id or not client_secret:
         st.warning("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET as environment variables to continue.")
@@ -511,7 +478,7 @@ def main() -> None:
         st.error(f"Failed to obtain OAuth token: {exc}")
         return
 
-    sensors_df = fetch_sensor_list(token, cache_bust)
+    sensors_df = fetch_sensor_list(token, ALL_SERIALS, SERIAL_TO_SITE, cache_bust)
     if sensors_df.empty:
         st.warning("No sensor metadata returned for the configured serials.")
         return
