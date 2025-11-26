@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "locale": "C.UTF-8",
+  "metadata": {
+    "appmode": "python-streamlit",
+    "entrypoint": "app"
+  },
+  "python": {
+    "version": "3.12.7",
+    "package_manager": {
+      "name": "pip",
+      "version": "24.2",
+      "package_file": "requirements.txt"
+    }
+  },
+  "files": {
+    "requirements.txt": {
+      "checksum": "f075a29b6813d4e47476a9737ede0e45"
+    },
+    ".github/workflows/alert-offline-sensors.yml": {
+      "checksum": "88eff4b54047020fb5b175785321d2ec"
+    },
+    ".github/workflows/poll-sensor-status.yml": {
+      "checksum": "4427d0a3ce03d6ef507ef23bef1de148"
+    },
+    ".gitignore": {
+      "checksum": "cb516acd7227dfef1e58181b40fa9392"
+    },
+    "README.md": {
+      "checksum": "cc973e07dfc24611ee8e53704aeafbc5"
+    },
+    "app.py": {
+      "checksum": "ea13e6c901104f70f35c3daa64186f0a"
+    },
+    "assets/PRC logo.png": {
+      "checksum": "f193a36f139bb9d3349d2b1cf07ef44e"
+    },
+    "scripts/alert_offline_sensors.py": {
+      "checksum": "160bd9185ffe7d03dd15b1903ddae5ea"
+    },
+    "scripts/fetch_georgia_sensors.py": {
+      "checksum": "7686995d4a9af7296676c63e8cf20f56"
+    },
+    "scripts/poll_sensor_status.py": {
+      "checksum": "e22fa2285b21dc9c386b007a22fe2f74"
+    },
+    "sensor_metadata.py": {
+      "checksum": "cf1d29a4bca95ba1bf7d63e1803f2308"
+    }
+  }
+}
