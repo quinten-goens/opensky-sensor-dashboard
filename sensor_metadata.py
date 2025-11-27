@@ -76,14 +76,16 @@ def build_sensor_mappings(
         serials.append(serial)
         icao = (record.get("icao") or "").upper()
         airport = record.get("airport", "")
+        country_name = record.get("country_name", "")
+        country_iso3 = record.get("country_iso3", "")
         label = f"{icao} ({airport})" if icao or airport else str(serial)
         site_entry = monitor_sites.setdefault(
             label,
             {
                 "icao": icao,
                 "airport": airport,
-                "country_name": record.get("country_name", ""),
-                "country_iso3": record.get("country_iso3", ""),
+                "country_name": country_name,
+                "country_iso3": country_iso3,
                 "lat": record.get("latitude"),
                 "lon": record.get("longitude"),
                 "sensors": [],
@@ -96,8 +98,9 @@ def build_sensor_mappings(
             "lon": record.get("longitude"),
             "icao": icao,
             "airport": airport,
-            "country": record.get("country_name", ""),
-            "country_iso3": record.get("country_iso3", ""),
+            "country": country_name,
+            "country_name": country_name,
+            "country_iso3": country_iso3,
         }
 
     return sorted(set(serials)), serial_to_site, monitor_sites

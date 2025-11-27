@@ -1,9 +1,15 @@
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict
 
 import requests
+
+# Ensure repository root is on the import path when running as a script
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from sensor_metadata import POCKETHOST_BASE, build_sensor_mappings, fetch_sensor_details, normalize_serial
 
@@ -84,10 +90,11 @@ def main() -> None:
         sensor_info = sensors.get(serial, {})
         online = bool(sensor_info.get("online", False))
         site_meta = serial_to_site.get(serial, {})
+        country_name = site_meta.get("country_name") or site_meta.get("country", "")
         payload = {
             "sensor_site_airport_icao": site_meta.get("icao", ""),
             "sensor_site_airport_name": site_meta.get("airport", ""),
-            "sensor_site_country_name": site_meta.get("country_name", ""),
+            "sensor_site_country_name": country_name,
             "sensor_site_country_iso3": site_meta.get("country_iso3", ""),
             "sensor_serial": serial,
             "polling_time": now_ts,
