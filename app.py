@@ -136,19 +136,21 @@ def fetch_sensor_list(
     df["airport"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("airport", ""))
     df["country"] = df["serial"].apply(lambda s: serial_to_site.get(s, {}).get("country", ""))
     df["latitude"] = df.apply(
-        lambda row: row["position"].get("latitude") if isinstance(row.get("position"), dict) else None, axis=1
+        lambda row: serial_to_site.get(row["serial"], {}).get("lat"), axis=1
     )
     df["longitude"] = df.apply(
-        lambda row: row["position"].get("longitude") if isinstance(row.get("position"), dict) else None, axis=1
+        lambda row: serial_to_site.get(row["serial"], {}).get("lon"), axis=1
     )
     df["latitude"] = df.apply(
-        lambda row: row["latitude"] if pd.notnull(row["latitude"]) else serial_to_site.get(row["serial"], {}).get("lat"),
+        lambda row: row["latitude"]
+        if pd.notnull(row["latitude"])
+        else (row["position"].get("latitude") if isinstance(row.get("position"), dict) else None),
         axis=1,
     )
     df["longitude"] = df.apply(
         lambda row: row["longitude"]
         if pd.notnull(row["longitude"])
-        else serial_to_site.get(row["serial"], {}).get("lon"),
+        else (row["position"].get("longitude") if isinstance(row.get("position"), dict) else None),
         axis=1,
     )
     df["added_dt"] = pd.to_datetime(df["added"], unit="s", utc=True, errors="coerce")
