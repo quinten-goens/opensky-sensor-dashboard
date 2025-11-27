@@ -1,4 +1,6 @@
 name: Poll Sensor Status
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
