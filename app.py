@@ -93,13 +93,24 @@ def fetch_token(client_id: str, client_secret: str, cache_bust: str) -> str:
         "client_secret": client_secret,
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    response = requests.post(AUTH_URL, data=data, headers=headers, timeout=20)
-    if not response.ok:
-        raise RuntimeError(f"Token request failed ({response.status_code}): {response.text}")
-    token = response.json().get("access_token")
-    if not token:
-        raise RuntimeError("Token response did not include access_token")
-    return token
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(AUTH_URL, data=data, headers=headers, timeout=20)
+            if not response.ok:
+                raise RuntimeError(f"Token request failed ({response.status_code}): {response.text}")
+            token = response.json().get("access_token")
+            if not token:
+                raise RuntimeError("Token response did not include access_token")
+            return token
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            if attempt < max_retries - 1:
+                wait = 2 ** (attempt + 1)
+                time.sleep(wait)
+            else:
+                raise RuntimeError(
+                    f"OpenSky auth server unreachable after {max_retries} attempts: {exc}"
+                ) from exc
 
 
 def _api_get(path: str, token: str, params: Optional[Dict] = None) -> Dict:
@@ -233,7 +244,7 @@ def render_msg_chart(msg_df: pd.DataFrame, serial_order: List[int], label_lookup
         )
         .properties(height=320)
     )
-    st.altair_chart(chart, width="stretch")
+    st.altair_chart(chart, use_container_width=True)
 
 
 @st.cache_data(show_spinner=False, ttl=300)
@@ -326,7 +337,7 @@ def render_map(sensor_df: pd.DataFrame, coverage_coords: List[List[float]], cove
         layers=layers,
         tooltip={"text": "Serial: {serial}\nSite: {site}\nOnline: {online}\nLast seen: {last_seen_dt}"},
     )
-    st.pydeck_chart(deck, width="stretch")
+    st.pydeck_chart(deck, use_container_width=True)
 
 
 def render_map_with_polygons(sensor_df: pd.DataFrame, coverage_polygons: List[Dict[str, object]]) -> None:
@@ -393,7 +404,7 @@ def render_map_with_polygons(sensor_df: pd.DataFrame, coverage_polygons: List[Di
         layers=layers,
         tooltip={"text": "Serial: {serial}\nSite: {site}\nOnline: {online}\nLast seen: {last_seen_dt}"},
     )
-    st.pydeck_chart(deck, width="stretch")
+    st.pydeck_chart(deck, use_container_width=True)
 
 
 def main() -> None:
@@ -443,7 +454,7 @@ def main() -> None:
         )
         logo_path = os.path.join("assets", "PRC logo.png")
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width="stretch")
+            st.sidebar.image(logo_path, use_container_width=True)
         st.title("OpenSky Sensor Dashboard")
 
         st.subheader("Site settings")
@@ -556,7 +567,7 @@ def main() -> None:
         st.subheader("Sensor details")
         display_cols = ["serial", "site", "type", "online", "latitude", "longitude", "added_dt", "last_seen_dt"]
         with st.spinner("Loading sensor details..."):
-            st.dataframe(site_df[display_cols], hide_index=True, width="stretch")
+            st.dataframe(site_df[display_cols], hide_index=True, use_container_width=True)
 
         with st.expander("API requests (details)", expanded=False):
             logs = st.session_state.get("api_logs", [])
@@ -684,7 +695,7 @@ def main() -> None:
                                         header=alt.Header(labelAngle=0, labelAlign="left"),
                                     )
                                 )
-                                st.altair_chart(faceted.resolve_scale(y="independent"), width="stretch")
+                                st.altair_chart(faceted.resolve_scale(y="independent"), use_container_width=True)
 
 
 if __name__ == "__main__":
