@@ -19,7 +19,7 @@ from sensor_metadata import fetch_sensor_details, build_sensor_mappings, POCKETH
 
 OWNER = "AIU/OPS"
 SCHEDULE = "0 * * * *"
-MASTER_FLOW_ID = "opdi_sensors"
+MASTER_FLOW_ID = "opdi_sensors_status"
 
 
 def to_snake_case(text: str) -> str:
