@@ -1,8 +1,22 @@
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from typing import Dict, List, Optional, Tuple
 
 POCKETHOST_BASE = "https://opdi.pockethost.io"
 DETAILS_COLLECTION = "opensky_sensor_details"
+
+_retry_strategy = Retry(
+    total=5,
+    backoff_factor=2,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET", "POST"],
+    raise_on_status=False,
+)
+_http = requests.Session()
+_http.mount("https://", HTTPAdapter(max_retries=_retry_strategy))
+_http.mount("http://", HTTPAdapter(max_retries=_retry_strategy))
+_http.headers.update({"User-Agent": "opensky-sensor-dashboard/1.0"})
 
 
 def normalize_serial(value: object) -> Optional[int]:
@@ -28,7 +42,7 @@ def fetch_sensor_details(token: str, per_page: int = 200) -> List[Dict[str, obje
 
     while True:
         params = {"page": page, "perPage": per_page, "sort": "airport_icao,sensor_serial"}
-        resp = requests.get(url, headers=headers, params=params, timeout=20)
+        resp = _http.get(url, headers=headers, params=params, timeout=20)
         resp.raise_for_status()
         payload = resp.json()
         items = payload.get("items", [])
