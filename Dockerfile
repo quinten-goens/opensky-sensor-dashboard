@@ -10,3 +10,7 @@ RUN R -e 'install.packages(c("httr", "remotes"), repos = "https://cran.r-project
 WORKDIR /app
 
 COPY scripts/poll_sensor_status.R scripts/
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
