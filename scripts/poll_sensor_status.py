@@ -13,6 +13,24 @@ if str(ROOT_DIR) not in sys.path:
 
 from sensor_metadata import POCKETHOST_BASE, build_sensor_mappings, fetch_sensor_details, normalize_serial
 
+def get_pb_token() -> str:
+    token = os.getenv("POCKETHOST_ADMIN_TOKEN")
+    if token:
+        return token
+    email = os.getenv("POCKETBASE_ADMIN_EMAIL")
+    password = os.getenv("POCKETBASE_ADMIN_PASSWORD")
+    if not email or not password:
+        raise RuntimeError(
+            "Set POCKETHOST_ADMIN_TOKEN or both POCKETBASE_ADMIN_EMAIL and POCKETBASE_ADMIN_PASSWORD."
+        )
+    resp = requests.post(
+        f"{POCKETHOST_BASE}/api/admins/auth-with-password",
+        json={"identity": email, "password": password},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return resp.json()["token"]
+
 AUTH_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 BASE_API_URL = "https://opensky-network.org/api"
 POCKETHOST_COLLECTION = "opensky_sensor_status"
@@ -66,12 +84,10 @@ def iso_now() -> str:
 def main() -> None:
     client_id = os.getenv("OPENSKY_CLIENT_ID")
     client_secret = os.getenv("OPENSKY_CLIENT_SECRET")
-    pb_token = os.getenv("POCKETHOST_ADMIN_TOKEN")
-
     if not client_id or not client_secret:
         sys.exit("Set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.")
-    if not pb_token:
-        sys.exit("Set POCKETHOST_ADMIN_TOKEN.")
+
+    pb_token = get_pb_token()
 
     try:
         details = fetch_sensor_details(pb_token)

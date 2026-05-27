@@ -1,0 +1,209 @@
+{
+  "flows": [
+    {
+      "id": "opdi_sensors",
+      "description": "Master flow for all OPDI sensors; depends on every individual sensor polling flow",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "depends_on": [
+          "opdi_sensor_essa_1",
+          "opdi_sensor_essa_2",
+          "opdi_sensor_essa_3",
+          "opdi_sensor_essa_4",
+          "opdi_sensor_eypa_1",
+          "opdi_sensor_eyvi_1",
+          "opdi_sensor_eyvi_2",
+          "opdi_sensor_sbsp_1",
+          "opdi_sensor_ugko_1",
+          "opdi_sensor_ugsb_1",
+          "opdi_sensor_ugtb_1",
+          "opdi_sensor_ugtb_2"
+        ],
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_essa_1",
+      "description": "OPDI sensor with serial -1408232560 at ESSA Stockholm Arlanda; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": -1408232560,
+        "airport_icao": "ESSA",
+        "airport_name": "Stockholm Arlanda",
+        "country": "Sweden",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_essa_2",
+      "description": "OPDI sensor with serial -1408232534 at ESSA Stockholm Arlanda; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": -1408232534,
+        "airport_icao": "ESSA",
+        "airport_name": "Stockholm Arlanda",
+        "country": "Sweden",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_essa_3",
+      "description": "OPDI sensor with serial -1408232487 at ESSA Stockholm Arlanda; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": -1408232487,
+        "airport_icao": "ESSA",
+        "airport_name": "Stockholm Arlanda",
+        "country": "Sweden",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_essa_4",
+      "description": "OPDI sensor with serial -1408231910 at ESSA Stockholm Arlanda; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": -1408231910,
+        "airport_icao": "ESSA",
+        "airport_name": "Stockholm Arlanda",
+        "country": "Sweden",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_sbsp_1",
+      "description": "OPDI sensor with serial 13076110 at SBSP S�o Paulo�Congonhas; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 13076110,
+        "airport_icao": "SBSP",
+        "airport_name": "S�o Paulo�Congonhas",
+        "country": "Brazil",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_ugko_1",
+      "description": "OPDI sensor with serial 607448202 at UGKO Kutaisi International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 607448202,
+        "airport_icao": "UGKO",
+        "airport_name": "Kutaisi International",
+        "country": "Georgia",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_eyvi_1",
+      "description": "OPDI sensor with serial 1497670044 at EYVI Vilnius International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 1497670044,
+        "airport_icao": "EYVI",
+        "airport_name": "Vilnius International",
+        "country": "Lithuania",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_ugtb_1",
+      "description": "OPDI sensor with serial 1995940501 at UGTB Tbilisi International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 1995940501,
+        "airport_icao": "UGTB",
+        "airport_name": "Tbilisi International",
+        "country": "Georgia",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_ugsb_1",
+      "description": "OPDI sensor with serial 1995940504 at UGSB Batumi International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 1995940504,
+        "airport_icao": "UGSB",
+        "airport_name": "Batumi International",
+        "country": "Georgia",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_ugtb_2",
+      "description": "OPDI sensor with serial 1996020079 at UGTB Tbilisi International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 1996020079,
+        "airport_icao": "UGTB",
+        "airport_name": "Tbilisi International",
+        "country": "Georgia",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_eyvi_2",
+      "description": "OPDI sensor with serial 2137168417 at EYVI Vilnius International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 2137168417,
+        "airport_icao": "EYVI",
+        "airport_name": "Vilnius International",
+        "country": "Lithuania",
+        "source": "opensky-sensor-dashboard"
+      }
+    },
+    {
+      "id": "opdi_sensor_eypa_1",
+      "description": "OPDI sensor with serial 2137191229 at EYPA Palanga International; polls sensor online/offline status hourly and records to PocketBase",
+      "type": "sensor_status",
+      "schedule": "0 * * * *",
+      "status": "ongoing",
+      "owner": "AIU/OPS",
+      "metadata": {
+        "sensor_serial": 2137191229,
+        "airport_icao": "EYPA",
+        "airport_name": "Palanga International",
+        "country": "Lithuania",
+        "source": "opensky-sensor-dashboard"
+      }
+    }
+  ]
+}
