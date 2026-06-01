@@ -181,7 +181,7 @@ main <- function() {
         n_fail <- n_fail + 1
         errors <- c(errors, sprintf("%s: %s", serial, result))
         pl_error(conn, flow_id, "sensor_status",
-                 message = sprintf("Failed to poll sensor %s: %s", serial, result),
+                 message = sprintf("Failed to poll sensor %s - Sensor offline", serial),
                  metadata = list(serial = serial, icao = icao))
       }
     }
