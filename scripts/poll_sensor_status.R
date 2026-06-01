@@ -172,7 +172,7 @@ main <- function() {
     })
 
     if (!is.null(flow_id)) {
-      if (result == "ok") {
+      if (result == "ok" && isTRUE(online)) {
         n_ok <- n_ok + 1
         pl_success(conn, flow_id, "sensor_status",
                    message = sprintf("Sensor %s online=%s", serial, online),
@@ -188,17 +188,6 @@ main <- function() {
   }
 
   elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-
-  if (n_fail == 0) {
-    pl_success(conn, MASTER_FLOW_ID, "sensor_status",
-               message = sprintf("All %d sensors polled successfully", n_ok),
-               metadata = list(n_ok = n_ok, duration_s = round(elapsed, 1)))
-  } else {
-    pl_error(conn, MASTER_FLOW_ID, "sensor_status",
-             message = sprintf("%d/%d sensors failed", n_fail, n_ok + n_fail),
-             metadata = list(n_ok = n_ok, n_fail = n_fail,
-                             errors = errors, duration_s = round(elapsed, 1)))
-  }
 
   message(sprintf("Done: %d ok, %d failed (%.1fs)", n_ok, n_fail, elapsed))
 }
